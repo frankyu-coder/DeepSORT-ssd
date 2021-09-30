@@ -13,6 +13,7 @@ linear_assignment *linear_assignment::getInstance()
     return instance;
 }
 
+// 一个目标长时间被遮挡情形
 TRACHER_MATCHD
 linear_assignment::matching_cascade(
         tracker *distance_metric,
@@ -73,6 +74,7 @@ linear_assignment::matching_cascade(
     return res;
 }
 
+// 计算余弦
 TRACHER_MATCHD
 linear_assignment::min_cost_matching(tracker *distance_metric,
         tracker::GATED_METRIC_FUNC distance_metric_func,
@@ -138,6 +140,7 @@ linear_assignment::min_cost_matching(tracker *distance_metric,
     return res;
 }
 
+// 计算马氏距离
 DYNAMICM
 linear_assignment::gate_cost_matrix(
         KalmanFilter *kf,

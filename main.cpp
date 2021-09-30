@@ -49,10 +49,12 @@ long long time_start = 0;
 long long time_end = 0;
 
 //Deep SORT parameter
-const int nn_budget = 400;
-const float max_cosine_distance = 0.2;
+const int nn_budget = 400;/* 每个轨迹保存过去nn_buget帧的状态 */
+const float max_cosine_distance = 0.2;/* 最大余弦距离 */
 
 // Remove the bounding boxes with low confidence using non-maxima suppression
+// 1.去掉输出张量中confidence低于阈值的检测框
+// 2.进行极大值抑制操作去掉那些重叠率较高的检测框
 void postprocess(cv::Mat &frame, const cv::Mat &out, DETECTIONS &d,int zh);
 
 // Draw the predicted bounding box
@@ -89,8 +91,6 @@ int main(int argc, char **argv)
 
 	//deep SORT
 	tracker mytracker(max_cosine_distance, nn_budget);
-
-
 
 	cv::dnn::Net net;
 	dnnConfig(net);
@@ -142,7 +142,7 @@ void postprocess(cv::Mat &frame, const cv::Mat &output, DETECTIONS &d,int zh)
 	std::vector<float> confidences;
 	std::vector<cv::Rect> boxes;
 	cv::Mat detectionMat(output.size[2], output.size[3], CV_32F, (cv::Scalar*)output.ptr<float>());
-	/*int*/ tempregion=0;
+	//tempregion=0;
 	for (int i = 0; i < detectionMat.rows; i++)
 	{
 		float confidence = detectionMat.at<float>(i, 2);
@@ -168,21 +168,19 @@ void postprocess(cv::Mat &frame, const cv::Mat &output, DETECTIONS &d,int zh)
 			if(Matafterzh.x<0 || Matafterzh.y<0 || Matafterzh.x>frame.cols || Matafterzh.y>frame.rows || (Matafterzh.x+Matafterzh.width)>frame.cols || (Matafterzh.y+Matafterzh.height)>frame.rows)
 				continue;
 			rectangle(frame, Matafterzh,Scalar(0, 255, 0),  cv::FILLED);
-			//putText(frame, label, Point(xLeftBottom, yLeftBottom), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 0, 0));
+			// putText(frame, label, Point(xLeftBottom, yLeftBottom), FONT_HERSHEY_SIMPLEX, 0.5, Scalar(0, 0, 0));
 			classIds.push_back(objectClass);
 			confidences.push_back(confidence);
 			boxes.push_back(Matafterzh);
-			//cv::String temp=cv::format("%.5d %f %d %d %d %d;\r\n",zh, confidence, (int)xLeftBottom, (int)yLeftBottom,(int)(xRightTop - xLeftBottom),(int)(yRightTop - yLeftBottom));
-			//detectionresult=detectionresult+temp;
-			tempregion=tempregion+1;
+			// cv::String temp=cv::format("%.5d %f %d %d %d %d;\r\n",zh, confidence, (int)xLeftBottom, (int)yLeftBottom,(int)(xRightTop - xLeftBottom),(int)(yRightTop - yLeftBottom));
+			// detectionresult=detectionresult+temp;
+			// tempregion=tempregion+1;
 		}
 	}
-	//cv::String temp1=cv::format("%.5d %d;\r\n",zh,tempregion);
-	//regioncount=regioncount+temp1;
-	std::vector<int> indices;
-	std::cout<<"boxesize before nms:"<<boxes.size()<<std::endl;
-	cv::dnn::NMSBoxes(boxes, confidences, confThreshold, nmsThreshold, indices);
-	std::cout<<"boxesize after nms:"<<boxes.size()<<std::endl;
+	// cv::String temp1=cv::format("%.5d %d;\r\n",zh,tempregion);
+	// regioncount=regioncount+temp1;
+	std::vector<int> indices; std::cout<<"boxesize before nms:"<<boxes.size()<<std::endl;
+	cv::dnn::NMSBoxes(boxes, confidences, confThreshold, nmsThreshold, indices);std::cout<<"boxesize after nms:"<<boxes.size()<<std::endl;
 	for (size_t i = 0; i < indices.size(); ++i)
 	{
 		size_t idx = static_cast<size_t>(indices[i]);
@@ -370,20 +368,14 @@ cv::CommandLineParser& parser, std::string& outputFile, cv::VideoCapture& cap, c
 
 		// get frame from the video
 		cap >> frame;
+
 		if (frame.empty())
 		{
+			std::cout << "Done Processing Or Net Error!!!" << std::endl;
 			counter.Count(cnInBees,cnOutBees);
-			cnInBees_bak  = cnInBees;
-			cnOutBees_bak = cnOutBees;
-
-			std::cout << "Done processing !!!" << std::endl;
-
-			time_t now;
-			struct tm *fmt; 
-
-			time(&now);  
-			fmt = localtime(&now);
-
+			cnInBees_bak  = cnInBees;cnOutBees_bak = cnOutBees;
+			time_t now;struct tm *fmt; 
+			time(&now); fmt = localtime(&now);
 			ofstream file(g_total_result_file, ios::app);
 			std::string content;
 			content = std::to_string(fmt->tm_year+1900) + "/" + std::to_string(fmt->tm_mon+1) 
@@ -392,13 +384,14 @@ cv::CommandLineParser& parser, std::string& outputFile, cv::VideoCapture& cap, c
 				+ ":" + std::to_string(fmt->tm_min) + ":" + std::to_string(fmt->tm_sec) 
 				+ " " + "cnInBees = " + std::to_string(cnInBees_bak) + ", cnOutBees = " + std::to_string(cnOutBees_bak);
 			file << content << std::endl;
-			std::cout << "Total result  is stored as " << g_total_result_file << std::endl;
-			cv::waitKey(3000);
-			break;
+			std::cout << "Total Result is stored as " << g_total_result_file << std::endl;
+			cv::waitKey(3000);break;
 		}
 
 		// Create a 4D blob from a frame.
-		//std::cout << "befoe  detection"<< std::endl;
+		// blobFromImage对图片进行了预处理：
+		// 1.整体像素值减去平均值
+		// 2.通过缩放系数对图片像素值进行缩放
 		blob=cv::dnn::blobFromImage(frame, 1.0, cv::Size(300, 300), cv::Scalar(), true, false);
 
 		//Sets the input to the network
@@ -409,10 +402,14 @@ cv::CommandLineParser& parser, std::string& outputFile, cv::VideoCapture& cap, c
 		// Remove the bounding boxes with low confidence
 		DETECTIONS detections;
 		postprocess(frame, outs, detections,nFrame);
+
+		// 获取特征值
 		if (FeatureTensor::getInstance()->getRectsFeature(frame, detections))
 		{
 			std::cout << "Tensorflow get feature succeed!" << std::endl;
+			// 先对跟踪器使用卡尔曼滤波算法进行预测
 			mytracker.predict();
+			// 通过匹配算法对追踪器和特征集进行更新
 			mytracker.update(detections);
 			std::vector<RESULT_DATA> result;
 			for (Track &track : mytracker.tracks)
@@ -428,29 +425,30 @@ cv::CommandLineParser& parser, std::string& outputFile, cv::VideoCapture& cap, c
 			}
 			// cvScalar的储存顺序是B-G-R，CV_RGB的储存顺序是R-G-B
 
-
+#if 0 /* 去掉画矩形框，提高运行效率 */
 			for (unsigned int k = 0; k < result.size(); k++)
 			{
 				DETECTBOX tmp = result[k].second;
 				cv::Rect rect = cv::Rect(tmp(0), tmp(1), tmp(2), tmp(3));
 				rectangle(frame, rect, cv::Scalar(0, 0, 255), 2);
 				std::string label = cv::format("%d", result[k].first);
-				//cv::putText(frame, label, cv::Point(rect.x, rect.y), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 255), 2);
-				//cv::String cvstr=cv::format("%.5d %d %d %d %d %d;\r\n", nFrame,result[k].first,(int)tmp(0), (int)tmp(1), (int)tmp(2), (int)tmp(3));
-				//traceresult=traceresult+cvstr;
+				cv::putText(frame, label, cv::Point(rect.x, rect.y), cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(0, 0, 255), 2);
+				cv::String cvstr=cv::format("%.5d %d %d %d %d %d;\r\n", nFrame,result[k].first,(int)tmp(0), (int)tmp(1), (int)tmp(2), (int)tmp(3));
+				traceresult=traceresult+cvstr;
 			}
 
 			if(int(nFrame/jg)>int((nFrame-1)/jg))
 			{
-				//std::cout<<"detectionresult:"<<detectionresult;
-				//std::cout<<"traceresult:"<<traceresult;
-				//std::cout<<"regioncount:"<<regioncount;
-				//detectionresult="";
-				//traceresult="";
-				//regioncount="";
+				std::cout<<"detectionresult:"<<detectionresult;
+				std::cout<<"traceresult:"<<traceresult;
+				std::cout<<"regioncount:"<<regioncount;
+				detectionresult="";
+				traceresult="";
+				regioncount="";
 			}
 			
-			//cv::waitKey(500);
+			cv::waitKey(500);
+#endif
 		}
 		else
 		{
@@ -471,17 +469,18 @@ cv::CommandLineParser& parser, std::string& outputFile, cv::VideoCapture& cap, c
 
 		std::cout << ticktime << ":286:" << freq << std::endl;
 		double t= ticktime/ freq;
-		//std::string label = cv::format("Inference time for a frame : %.2f ms", t);
-		//putText(frame, label, cv::Point(0, 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255));
+#if 0 /* 去掉画矩形框，提高运行效率 */
+		std::string label = cv::format("Inference time for a frame : %.2f ms", t);
+		putText(frame, label, cv::Point(0, 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255));
 
-		// Write the frame with the detection boxes
-		//cv::Mat detectedFrame;
-		//frame.convertTo(detectedFrame, CV_8U);
-		//if (parser.has("image"))
-		//	imwrite(outputFile, detectedFrame);
-		//else
-		//	video.write(detectedFrame);
-
+		 Write the frame with the detection boxes
+		cv::Mat detectedFrame;
+		frame.convertTo(detectedFrame, CV_8U);
+		if (parser.has("image"))
+			imwrite(outputFile, detectedFrame);
+		else
+			video.write(detectedFrame);
+#endif
 		time_end = gettimeU();
 		timeusePrint("total", time_start, time_end);
 		
@@ -489,15 +488,15 @@ cv::CommandLineParser& parser, std::string& outputFile, cv::VideoCapture& cap, c
 
 		if (time_pass > (60 *1000))// == nFrame % 30)
 		{
-		counter.Count(cnInBees,cnOutBees);
-		cnInBees_bak  = cnInBees;
-		cnOutBees_bak = cnOutBees;
-		//cnInBees_total += cnInBees;
-		//cnOutBees_total += cnOutBees;
-		//nFrame = 0;
-		time_start_init = gettimeU();
-		std::cout << "--------------cnInBees  =  " << cnInBees << " , " << "--------------cnOutBees = " << cnOutBees << " , "  << "--------------tempRegion = " << tempregion <<  std::endl;
-		std::cout << "--------------cnInBees_total = " << cnInBees_total << "--------------cnOutBees_total = -" << cnOutBees_total << std::endl;
+			counter.Count(cnInBees, cnOutBees);
+			cnInBees_bak = cnInBees;
+			cnOutBees_bak = cnOutBees;
+			//cnInBees_total += cnInBees;
+			//cnOutBees_total += cnOutBees;
+			//nFrame = 0;
+			time_start_init = gettimeU();
+			std::cout << "--------------cnInBees  =  " << cnInBees << " , " << "--------------cnOutBees = " << cnOutBees << " , " << "--------------tempRegion = " << tempregion << std::endl;
+			std::cout << "--------------cnInBees_total = " << cnInBees_total << "--------------cnOutBees_total = -" << cnOutBees_total << std::endl;
 		}
 		std::cout << "nFrame = " << nFrame << std::endl;
 		nFrame++;
