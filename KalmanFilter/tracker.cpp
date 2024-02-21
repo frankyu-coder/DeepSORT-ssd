@@ -101,6 +101,7 @@ void tracker::update(const DETECTIONS &detections)
     }
     this->metric->partial_fit(features, targets, active_targets);
     */
+    // 特征集更新
     vector<int> active_targets;
     vector<TRACKER_DATA> tid_features;
     for (Track& track:tracks) {
