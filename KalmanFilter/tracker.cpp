@@ -26,6 +26,7 @@ tracker::tracker(/*NearNeighborDisMetric *metric,*/
     this->_next_idx = 1;
 }
 
+// 利用卡尔曼滤波算法进行预测
 void tracker::predict()
 {    
     for(Track& track:tracks) {
@@ -33,15 +34,17 @@ void tracker::predict()
     }
 }
 
+// 卡尔曼滤波更新
 void tracker::update(const DETECTIONS &detections)
 {
     TRACHER_MATCHD res;
-    _match(detections, res);
+    _match(detections, res); // 匈牙利匹配
 
     vector<MATCH_DATA>& matches = res.matches;
     //#ifdef MY_inner_DEBUG
     //    printf("res.matches size = %d:\n", matches.size());
     //#endif
+    // 使用kf更新mean(X(k))和P(k)均方误差；并且将检测器的特征图保存；
     for(MATCH_DATA& data:matches) {
         int track_idx = data.first;
         int detection_idx = data.second;
@@ -54,6 +57,7 @@ void tracker::update(const DETECTIONS &detections)
     //#ifdef MY_inner_DEBUG
     //    printf("res.unmatched_tracks size = %d\n", unmatched_tracks.size());
     //#endif
+    // 将未匹配的track中状态为tentative的直接删除；且将time_since_updated大于max_age的track删除
     for(int& track_idx:unmatched_tracks) {
         this->tracks[track_idx].mark_missed();
     }
@@ -61,6 +65,7 @@ void tracker::update(const DETECTIONS &detections)
     //#ifdef MY_inner_DEBUG
     //    printf("res.unmatched_detections size = %d\n", unmatched_detections.size());
     //#endif
+    // 使用kf.initiate创建新的mean(X(k))和P(k)均方误差
     for(int& detection_idx:unmatched_detections) {
         this->_initiate_track(detections[detection_idx]);
     }

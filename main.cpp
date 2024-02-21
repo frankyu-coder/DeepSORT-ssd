@@ -407,9 +407,9 @@ cv::CommandLineParser& parser, std::string& outputFile, cv::VideoCapture& cap, c
 		if (FeatureTensor::getInstance()->getRectsFeature(frame, detections))
 		{
 			std::cout << "Tensorflow get feature succeed!" << std::endl;
-			// 先对跟踪器使用卡尔曼滤波算法进行预测
+			// 通过卡尔曼滤波算法进行预测
 			mytracker.predict();
-			// 通过匹配算法对追踪器和特征集进行更新
+			// 通过匹配算法对追踪器和特征集进行卡尔曼滤波更新
 			mytracker.update(detections);
 			std::vector<RESULT_DATA> result;
 			for (Track &track : mytracker.tracks)
